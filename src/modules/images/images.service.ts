@@ -1,6 +1,10 @@
 import type { Image } from '@prisma/client';
-import type { ImageDto } from '../../shared/index.js';
-import { rejectionMessage } from '../../shared/index.js';
+import {
+  JOB_ABANDON_MS,
+  JOB_STALE_LOCK_MS,
+  type ImageDto,
+  rejectionMessage,
+} from '../../shared/index.js';
 import { deleteObjects, presignGetUrl } from '../../lib/storage.js';
 import { notFound } from '../../types/app-error.js';
 import { UploadsRepository } from '../uploads/uploads.repository.js';
@@ -33,7 +37,11 @@ export class ImagesService {
     if (!image) {
       throw notFound('Image not found');
     }
-    return this.toDto(image);
+    const kept = await this.discardAbandoned([image]);
+    if (!kept[0]) {
+      throw notFound('Image not found');
+    }
+    return this.toDto(kept[0]);
   }
 
   async quota(userId: string) {
@@ -56,11 +64,15 @@ export class ImagesService {
   }
 
   private async discardAbandoned(rows: Image[]): Promise<Image[]> {
-    const abandonedBefore = Date.now() - 2 * 60 * 1000;
+    const pendingBefore = Date.now() - JOB_STALE_LOCK_MS;
+    const processingBefore = Date.now() - JOB_ABANDON_MS;
     const kept: Image[] = [];
     for (const image of rows) {
       const abandoned =
-        image.status === 'PENDING' && image.createdAt.getTime() < abandonedBefore;
+        (image.status === 'PENDING' &&
+          image.createdAt.getTime() < pendingBefore) ||
+        (image.status === 'PROCESSING' &&
+          image.createdAt.getTime() < processingBefore);
       if (!abandoned) {
         kept.push(image);
         continue;
@@ -79,9 +91,7 @@ export class ImagesService {
   async toDto(image: Image): Promise<ImageDto> {
     const previewKey =
       image.thumbnailKey ??
-      (image.status === 'ACCEPTED' ||
-      image.status === 'PROCESSING' ||
-      image.status === 'REJECTED'
+      (image.status === 'ACCEPTED' || image.status === 'REJECTED'
         ? image.storageKey
         : null);
     let previewUrl: string | null = null;

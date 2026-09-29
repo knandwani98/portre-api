@@ -123,6 +123,20 @@ export async function processImageJob(jobId: string, image: Image): Promise<void
   }
 }
 
+export async function recoverOrphanedJobs(): Promise<void> {
+  const orphaned = await uploads.listOrphanedJobs();
+  for (const job of orphaned) {
+    logger.warn(
+      { imageId: job.imageId, jobId: job.id, attempts: job.attempts },
+      'Recovering orphaned processing job',
+    );
+    if (job.status !== 'FAILED') {
+      await uploads.markFailed(job.id, 'Processing stalled', false);
+    }
+    await deleteFailedUpload(job.image);
+  }
+}
+
 async function deleteFailedUpload(image: Image): Promise<void> {
   await deleteObjects([image.storageKey, image.thumbnailKey]);
   try {
