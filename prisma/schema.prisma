@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImageStatus {
+  PENDING
+  PROCESSING
+  ACCEPTED
+  REJECTED
+}
+
+enum RejectionReason {
+  INVALID_FORMAT
+  FILE_TOO_SMALL
+  RESOLUTION_TOO_LOW
+  TOO_SIMILAR
+  BLURRY
+  NO_FACE
+  FACE_TOO_SMALL
+  MULTIPLE_FACES
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  images    Image[]
+}
+
+model Image {
+  id               String             @id @default(cuid())
+  userId           String
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status           ImageStatus        @default(PENDING)
+  originalName     String
+  mimeType         String
+  sizeBytes        Int
+  width            Int?
+  height           Int?
+  storageKey       String
+  thumbnailKey     String?
+  perceptualHash   String?
+  batchId          String?
+  blurScore        Float?
+  faceCount        Int?
+  largestFaceRatio Float?
+  rejectionReasons RejectionReason[]
+  createdAt        DateTime           @default(now())
+  processedAt      DateTime?
+  job              ProcessingJob?
+
+  @@index([userId, status])
+  @@index([userId, perceptualHash])
+  @@index([userId, batchId])
+}
+
+model ProcessingJob {
+  id        String    @id @default(cuid())
+  imageId   String    @unique
+  image     Image     @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  status    JobStatus @default(QUEUED)
+  attempts  Int       @default(0)
+  lockedAt  DateTime?
+  lastError String?
+  runAfter  DateTime  @default(now())
+  createdAt DateTime  @default(now())
+
+  @@index([status, runAfter])
+}
