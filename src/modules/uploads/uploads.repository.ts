@@ -1,5 +1,5 @@
 import type { Image, ProcessingJob } from '@prisma/client';
-import { JOB_MAX_ATTEMPTS } from '../../shared/index.js';
+import { JOB_MAX_ATTEMPTS, JOB_STALE_LOCK_MS } from '../../shared/index.js';
 import { prisma } from '../../lib/prisma.js';
 
 export class UploadsRepository {
@@ -89,6 +89,24 @@ export class UploadsRepository {
             lastError,
             lockedAt: null,
           },
+    });
+  }
+
+  listOrphanedJobs(): Promise<Array<ProcessingJob & { image: Image }>> {
+    const staleBefore = new Date(Date.now() - JOB_STALE_LOCK_MS);
+    return prisma.processingJob.findMany({
+      where: {
+        image: { status: { in: ['PENDING', 'PROCESSING'] } },
+        OR: [
+          {
+            status: 'RUNNING',
+            attempts: { gte: JOB_MAX_ATTEMPTS },
+            lockedAt: { lt: staleBefore },
+          },
+          { status: 'FAILED' },
+        ],
+      },
+      include: { image: true },
     });
   }
 }

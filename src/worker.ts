@@ -3,7 +3,7 @@ import { logger } from './lib/logger.js';
 import { prisma } from './lib/prisma.js';
 import { UploadsRepository } from './modules/uploads/uploads.repository.js';
 import { loadFaceModels } from './pipeline/face-detector.js';
-import { processImageJob } from './pipeline/process-image.js';
+import { processImageJob, recoverOrphanedJobs } from './pipeline/process-image.js';
 
 const uploads = new UploadsRepository();
 let running = false;
@@ -24,6 +24,7 @@ async function loop(): Promise<void> {
     try {
       const job = await uploads.claimNext();
       if (!job) {
+        await recoverOrphanedJobs();
         await sleep(JOB_POLL_INTERVAL_MS);
         continue;
       }
