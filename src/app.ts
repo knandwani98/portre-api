@@ -38,7 +38,7 @@ export function createApp() {
   );
   app.use(
     clerkMiddleware({
-      authorizedParties: [env.FRONTEND_ORIGIN],
+      authorizedParties: env.FRONTEND_ORIGIN,
     }),
   );
 

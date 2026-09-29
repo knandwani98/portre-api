@@ -3,6 +3,17 @@ import { z } from 'zod';
 
 config();
 
+const originList = z
+  .string()
+  .min(1)
+  .transform((value) =>
+    value
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.string().url()).min(1));
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   CLERK_PUBLISHABLE_KEY: z.string().min(1),
@@ -14,7 +25,7 @@ const envSchema = z.object({
   S3_REGION: z.string().min(1).default('auto'),
   S3_PREFIX: z.enum(['local', 'prod']).default('local'),
   API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
-  FRONTEND_ORIGIN: z.string().url(),
+  FRONTEND_ORIGIN: originList,
   PORT: z.coerce.number().int().positive().default(4000),
   RUN_WORKER: z
     .enum(['true', 'false'])
